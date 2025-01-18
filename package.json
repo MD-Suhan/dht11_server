@@ -1,0 +1,12 @@
+{
+  "name": "dht11_server",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "npx tailwindcss build src/styles.css -o dist/styles.css --minify"
+  },
+  "dependencies": {
+    "tailwindcss": "^3.4.17",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.5.1"
+  }
+}

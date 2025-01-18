@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Evo Self Care</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="./src/styles.css">
+</head>
+<body class="bg-blue-50 text-gray-800 min-h-screen flex flex-col font-sans">
+  <header class="bg-blue-600 text-white p-5 shadow-lg">
+    <h1 class="text-2xl md:text-3xl font-bold text-center">Lakshmipur Govt. College</h1>
+    <p class="text-lg text-center mt-2">Evo Self Care</p>
+  </header>
+
+  <main class="flex-grow container mx-auto px-4 py-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div class="bg-white rounded-lg shadow-md p-5 text-center">
+        <h2 class="text-xl font-bold">Temperature</h2>
+        <p id="temperature" class="text-3xl text-blue-600 font-semibold mt-3">20.00 °C</p>
+      </div>
+      <div class="bg-white rounded-lg shadow-md p-5 text-center">
+        <h2 class="text-xl font-bold">Humidity</h2>
+        <p id="humidity" class="text-3xl text-blue-600 font-semibold mt-3">60.00 %</p>
+      </div>
+    </div>
+
+    <div id="alertBox" class="bg-red-100 border-l-4 border-red-500 text-red-700 p-5 rounded-lg shadow-md mt-8 fade-in hidden">
+      <div id="alertList" class="mt-4 space-y-3"></div>
+    </div>
+  </main>
+
+  <footer class="bg-gray-800 text-white text-center p-4">
+    <p class="text-sm">&copy; 2025 Evo Self Care. All Rights Reserved.</p>
+    <p class="text-sm italic">Designed by Evo-Self-Care Tech Team</p>
+  </footer>
+
+  <script>
+    const alertSound = new Audio("./alert.mp3");
+    alertSound.loop = true; 
+
+    // Web Serial API setup
+    let port;
+    let reader;
+    let decoder;
+    let inputDone;
+    let outputDone;
+    let inputStream;
+    let outputStream;
+
+    async function connectToArduino() {
+      try {
+        // Request a port and open a connection
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 9600 });
+
+        // Set up the reader and decoder
+        inputStream = port.readable;
+        outputStream = port.writable;
+        const decoder = new TextDecoderStream();
+        inputStream.pipeTo(decoder.writable);
+        const inputStreamReadable = decoder.readable;
+
+        reader = inputStreamReadable.getReader();
+
+        // Start reading the data from the Arduino
+        readData();
+      } catch (error) {
+        console.error("Failed to connect to Arduino:", error);
+      }
+    }
+
+    async function readData() {
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) {
+            reader.releaseLock();
+            break;
+          }
+
+          const data = value.trim();
+          if (data) {
+            const sensorData = JSON.parse(data);
+            updateDisplay(sensorData);
+          }
+        }
+      } catch (error) {
+        console.error("Error reading from Arduino:", error);
+      }
+    }
+
+    function updateDisplay(data) {
+      document.getElementById("temperature").innerText = `${data.temperature} °C`;
+      document.getElementById("humidity").innerText = `${data.humidity} %`;
+      checkThresholds(data);
+    }
+
+    const thresholds = { tempHigh: 30, tempLow: 15, humidityLow: 40 };
+    let activeAlerts = [];
+    let alertSoundPlaying = false;
+
+    function checkThresholds(data) {
+      activeAlerts = [];
+      if (data.temperature > thresholds.tempHigh) {
+        activeAlerts.push({ message: "High Temperature Alert!", instructions: "Stay hydrated." });
+      }
+      if (data.temperature < thresholds.tempLow) {
+        activeAlerts.push({ message: "Low Temperature Alert!", instructions: "Wear warm clothes." });
+      }
+      if (data.humidity < thresholds.humidityLow) {
+        activeAlerts.push({ message: "Low Humidity Alert!", instructions: "Use a humidifier." });
+      }
+      displayAlerts();
+    }
+
+    function displayAlerts() {
+      const alertBox = document.getElementById("alertBox");
+      const alertList = document.getElementById("alertList");
+      alertList.innerHTML = activeAlerts.map((alert) => `
+        <div class="bg-red-200 p-3 rounded-md shadow">
+          <p class="font-bold">${alert.message}</p>
+          <p class="text-sm">${alert.instructions}</p>
+        </div>`).join("");
+      
+      if (activeAlerts.length > 0) {
+        alertBox.classList.remove("hidden");
+        if (!alertSoundPlaying) {
+          alertSound.play();
+          alertSoundPlaying = true;
+        }
+      } else {
+        alertBox.classList.add("hidden");
+        alertSound.pause();
+        alertSound.currentTime = 0;
+        alertSoundPlaying = false;
+      }
+    }
+
+    // Call this function to start the connection when the page loads
+    window.onload = () => {
+      connectToArduino();
+    };
+  </script>
+</body>
+</html>
